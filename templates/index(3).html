@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>School Test Archive</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --primary: #4f46e5;
+    --primary-dark: #3730a3;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --success: #16a34a;
+    --error: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  .container { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  p.subtitle { color: var(--muted); margin-top: 0; margin-bottom: 24px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .dropzone.dragover { border-color: var(--primary); background: #eef2ff; }
+  .dropzone input { display: none; }
+  .dropzone .hint { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+
+  #preview { max-width: 100%; margin-top: 16px; border-radius: 8px; display: none; }
+
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    margin-top: 16px;
+  }
+  button:hover:not(:disabled) { background: var(--primary-dark); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status { margin-top: 12px; font-size: 0.9rem; }
+  .status.error { color: var(--error); }
+  .status.success { color: var(--success); }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .meta-item {
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .meta-item .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .meta-item .value { font-weight: 600; margin-top: 2px; }
+
+  .privacy-banner {
+    background: #fef3c7;
+    border: 1px solid #fbbf24;
+    color: #92400e;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+  }
+
+  .transcription {
+    white-space: pre-wrap;
+    background: #f9fafb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 0.9rem;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .question {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .question .qnum { font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+  .question textarea {
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+  }
+  .question .result { margin-top: 8px; font-size: 0.85rem; font-weight: 600; }
+  .question .result.correct { color: var(--success); }
+  .question .result.incorrect { color: var(--error); }
+  .question .result.unknown { color: var(--muted); }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  h2 { font-size: 1.1rem; margin-top: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📚 School Test Archive</h1>
+  <p class="subtitle">Upload a photo of a test. Claude extracts the questions so you can turn it into an interactive quiz.</p>
+
+  <div class="card">
+    <h2>Upload a test</h2>
+    <form id="upload-form">
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="file-input" name="test_image" accept="image/png, image/jpeg, image/webp">
+        <div id="dropzone-text">Click to choose a photo, or drag one here</div>
+        <div class="hint">JPEG, PNG or WEBP, up to 8&nbsp;MB</div>
+        <img id="preview" alt="Selected test preview">
+      </label>
+      <button type="submit" id="submit-btn" disabled>Analyze test</button>
+      <div id="status" class="status"></div>
+    </form>
+  </div>
+
+  <div class="card" id="results-card" style="display:none;">
+    <h2>Extracted test</h2>
+    <div id="privacy-banner"></div>
+    <div class="meta-grid" id="meta-grid"></div>
+    <details>
+      <summary style="cursor:pointer; margin-bottom:8px;">Full transcription</summary>
+      <div class="transcription" id="transcription"></div>
+    </details>
+  </div>
+
+  <div class="card" id="quiz-card" style="display:none;">
+    <h2>Take the quiz</h2>
+    <div id="quiz-questions"></div>
+    <button id="grade-btn">Check my answers</button>
+    <div id="grade-summary" class="status"></div>
+  </div>
+</div>
+
+<script>
+const fileInput = document.getElementById('file-input');
+const dropzone = document.getElementById('dropzone');
+const dropzoneText = document.getElementById('dropzone-text');
+const preview = document.getElementById('preview');
+const submitBtn = document.getElementById('submit-btn');
+const statusEl = document.getElementById('status');
+const uploadForm = document.getElementById('upload-form');
+
+const resultsCard = document.getElementById('results-card');
+const privacyBanner = document.getElementById('privacy-banner');
+const metaGrid = document.getElementById('meta-grid');
+const transcriptionEl = document.getElementById('transcription');
+
+const quizCard = document.getElementById('quiz-card');
+const quizQuestionsEl = document.getElementById('quiz-questions');
+const gradeBtn = document.getElementById('grade-btn');
+const gradeSummary = document.getElementById('grade-summary');
+
+let currentTestId = null;
+let pendingResize = null; // tracks any in-flight image processing so submit can wait on it
+
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    handleFileSelected();
+  }
+});
+fileInput.addEventListener('change', handleFileSelected);
+
+const MAX_DIMENSION = 600;
+const JPEG_QUALITY = 0.4;
+
+/**
+ * If the given file is an image larger than MAX_DIMENSION in either
+ * dimension, resizes it down (preserving aspect ratio) via a canvas and
+ * re-encodes it as JPEG at JPEG_QUALITY. Otherwise returns the original
+ * file untouched. Non-image files are also returned untouched.
+ */
+async function resizeImageIfNeeded(file) {
+  console.log(
+    `[resize] Original file: "${file.name}", ${(file.size / 1024).toFixed(1)} KB, type=${file.type}`
+  );
+
+  if (!file.type.startsWith('image/')) {
+    console.log('[resize] Not an image file — skipping resize.');
+    return file;
+  }
+
+  const bitmap = await loadImage(file);
+  const { width, height } = bitmap;
+  console.log(`[resize] Original dimensions: ${width}x${height}px`);
+
+  if (width <= MAX_DIMENSION && height <= MAX_DIMENSION) {
+    console.log(`[resize] Already within ${MAX_DIMENSION}x${MAX_DIMENSION} — skipping resize.`);
+    return file; // already small enough, no need to touch it
+  }
+
+  const scale = MAX_DIMENSION / Math.max(width, height);
+  const targetWidth = Math.round(width * scale);
+  const targetHeight = Math.round(height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
+  );
+
+  // Keep the original base filename but force a .jpg extension, since
+  // we've re-encoded as JPEG regardless of the source format.
+  const baseName = file.name.replace(/\.[^/.]+$/, '') || 'test-photo';
+  const resizedFile = new File([blob], `${baseName}.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
+
+  console.log(
+    `[resize] Resized to ${targetWidth}x${targetHeight}px, ` +
+    `new size: ${(resizedFile.size / 1024).toFixed(1)} KB ` +
+    `(was ${(file.size / 1024).toFixed(1)} KB, ` +
+    `${(100 - (resizedFile.size / file.size) * 100).toFixed(0)}% smaller)`
+  );
+
+  return resizedFile;
+}
+
+/**
+ * Converts a File/Blob into a base64 data URL (e.g. "data:image/jpeg;base64,...")
+ * via FileReader. Used to send the resized image as JSON instead of
+ * multipart/form-data.
+ */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(err);
+    };
+    img.src = url;
+  });
+}
+
+async function handleFileSelected() {
+  const originalFile = fileInput.files[0];
+  if (!originalFile) return;
+
+  dropzoneText.textContent = 'Preparing image…';
+  submitBtn.disabled = true;
+
+  // Expose this in-flight work so the submit handler can await it even if
+  // the user manages to trigger a submit before this finishes.
+  const resizeTask = (async () => {
+    try {
+      const processedFile = await resizeImageIfNeeded(originalFile);
+
+      // Replace the input's file list with the resized/compressed version
+      // so that whatever reads fileInput.files later (our fetch upload)
+      // sends the lightweight file instead of the original.
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(processedFile);
+      fileInput.files = dataTransfer.files;
+      console.log(`[resize] fileInput.files now contains: "${fileInput.files[0].name}", ${(fileInput.files[0].size / 1024).toFixed(1)} KB`);
+
+      dropzoneText.textContent = processedFile.name;
+      preview.src = URL.createObjectURL(processedFile);
+      preview.style.display = 'block';
+    } catch (err) {
+      console.error('Image resize failed, falling back to original file:', err);
+      dropzoneText.textContent = originalFile.name;
+      preview.src = URL.createObjectURL(originalFile);
+      preview.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  })();
+
+  pendingResize = resizeTask;
+  await resizeTask;
+  if (pendingResize === resizeTask) {
+    pendingResize = null;
+  }
+}
+
+uploadForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  // Hard guard: if a resize is still in flight (e.g. the user double-clicked
+  // submit right after selecting a file), wait for it before we touch
+  // fileInput.files, so we never send the original oversized image.
+  if (pendingResize) {
+    console.log('[submit] Waiting for in-flight image resize to finish…');
+    await pendingResize;
+  }
+
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  console.log(`[submit] Preparing file for upload: "${file.name}", ${(file.size / 1024).toFixed(1)} KB`);
+
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner"></span>Analyzing…';
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+  resultsCard.style.display = 'none';
+  quizCard.style.display = 'none';
+
+  try {
+    const imageBase64 = await fileToBase64(file);
+    console.log(
+      `[submit] Base64 payload size: ${(imageBase64.length / 1024).toFixed(1)} KB ` +
+      `(encoded from a ${(file.size / 1024).toFixed(1)} KB file)`
+    );
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_base64: imageBase64, filename: file.name }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Something went wrong.');
+    }
+
+    renderResults(data);
+    statusEl.textContent = 'Done!';
+    statusEl.className = 'status success';
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = 'status error';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Analyze test';
+  }
+});
+
+function renderResults(data) {
+  currentTestId = data.id;
+
+  privacyBanner.innerHTML = '';
+  if (data.privacy_flag) {
+    privacyBanner.innerHTML = `<div class="privacy-banner">⚠️ A personal name was detected and redacted from the transcription for privacy.</div>`;
+  }
+
+  const meta = data.metadata || {};
+  metaGrid.innerHTML = ['class', 'subject', 'date', 'topic'].map(key => `
+    <div class="meta-item">
+      <div class="label">${key}</div>
+      <div class="value">${escapeHtml(meta[key] || 'unknown')}</div>
+    </div>
+  `).join('');
+
+  transcriptionEl.textContent = data.transcription || '(no transcription returned)';
+  resultsCard.style.display = 'block';
+
+  renderQuiz(data.quiz_questions || []);
+}
+
+function renderQuiz(questions) {
+  if (!questions.length) {
+    quizCard.style.display = 'none';
+    return;
+  }
+  quizQuestionsEl.innerHTML = questions.map(q => `
+    <div class="question" data-qnum="${q.question_number}">
+      <div class="qnum">Question ${q.question_number}</div>
+      <div>${escapeHtml(q.text)}</div>
+      <textarea placeholder="Type your answer..."></textarea>
+      <div class="result"></div>
+    </div>
+  `).join('');
+  gradeSummary.textContent = '';
+  quizCard.style.display = 'block';
+}
+
+gradeBtn.addEventListener('click', async () => {
+  if (!currentTestId) return;
+  const answers = {};
+  document.querySelectorAll('.question').forEach(qEl => {
+    const qnum = qEl.dataset.qnum;
+    const textarea = qEl.querySelector('textarea');
+    answers[qnum] = textarea.value;
+  });
+
+  gradeBtn.disabled = true;
+  gradeBtn.innerHTML = '<span class="spinner"></span>Checking…';
+
+  try {
+    const res = await fetch(`/api/tests/${currentTestId}/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not grade answers.');
+
+    let correctCount = 0;
+    let gradableCount = 0;
+    data.results.forEach(r => {
+      const qEl = document.querySelector(`.question[data-qnum="${r.question_number}"] .result`);
+      if (r.gradable) {
+        gradableCount++;
+        if (r.is_correct) correctCount++;
+        qEl.textContent = r.is_correct ? '✔ Correct' : `✘ Incorrect (expected: ${r.correct_answer})`;
+        qEl.className = 'result ' + (r.is_correct ? 'correct' : 'incorrect');
+      } else {
+        qEl.textContent = 'Not auto-gradable — needs manual review';
+        qEl.className = 'result unknown';
+      }
+    });
+
+    gradeSummary.textContent = gradableCount
+      ? `Score: ${correctCount} / ${gradableCount} auto-gradable questions`
+      : 'No auto-gradable questions in this test.';
+    gradeSummary.className = 'status success';
+  } catch (err) {
+    gradeSummary.textContent = err.message;
+    gradeSummary.className = 'status error';
+  } finally {
+    gradeBtn.disabled = false;
+    gradeBtn.textContent = 'Check my answers';
+  }
+});
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
